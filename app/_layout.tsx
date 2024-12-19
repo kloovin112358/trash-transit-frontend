@@ -1,39 +1,138 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
-import 'react-native-reanimated';
+import React, { useEffect, useState } from 'react';
 
-import { useColorScheme } from '@/hooks/useColorScheme';
+import { Stack } from "expo-router";
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Text, View, Button, FlatList, ActivityIndicator, StyleSheet, Alert, TouchableOpacity, Linking } from 'react-native';
+import {SafeAreaView} from "react-native-safe-area-context"
+import { Ionicons } from '@expo/vector-icons';
+import Index from './index';
+import Comments from "./comments";
+import { ErrorProvider } from './components/ErrorContext';
+import {backend_host} from "../project-variables.json"
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
+const Tab = createBottomTabNavigator();
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
+  const [loading, setLoading] = useState<boolean>(true);
+  const [listOfCities, setListOfCities] = useState<string[]>([])
 
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
-
-  if (!loaded) {
-    return null;
+  const launchErrorAlert = (errorMsg: string) => {
+    Alert.alert('‼️ An unexpected error occurred.', errorMsg, [
+      {
+        text: 'OK',
+        // onPress: () => setError(null), // Reset the error state after acknowledging the alert
+      },
+    ]);
   }
 
+  const fetchData = async () => {
+    fetch(`${backend_host}/api/get-all-cities/`, {
+      method: 'GET',
+    })
+    .then((response) => {
+      // Check if the response status code is OK (200-299)
+      if (!response.ok) {
+        launchErrorAlert("Oops! There was a problem getting the list of cities. Please open the app and try again.")
+        throw new Error(`Error: ${response.status} - ${response.statusText}`);
+      }
+      return response.json(); // Parse the response as JSON
+    })
+    .then((data) => {
+      setListOfCities(data)
+    })
+    .catch((error) => {
+
+      launchErrorAlert("Oops! There was a problem connecting to the server. Please open the app and try again.")
+    });
+    setLoading(false)
+  } 
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  if (loading) {
+      return (
+        <SafeAreaView style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#007bff" />
+        </SafeAreaView>
+      );
+    }
+
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <ErrorProvider>
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+          tabBarActiveTintColor: "#007bff",
+          tabBarShowLabel: false,
+          tabBarStyle: {
+            paddingBottom: 0,
+            paddingTop: 8,
+            height: 53,
+            marginTop: 0,
+          },
+          tabBarIcon: ({ color, size }) => {
+              let iconName;
+      
+              if (route.name === 'index') {
+                iconName = 'bar-chart';
+              } else {
+                iconName = 'chatbox-ellipses';
+              }
+      
+              return<Ionicons name={iconName as any} size={26} color={color} />;
+          },
+          header: () => {
+            return (
+            <SafeAreaView style={styles.headerContainerStyle}>
+              <Text style={styles.headerText}>
+              {/* <Ionicons name="trash" size={24} color="black" /> <Ionicons name="train-sharp" size={24} color="black" /> */}
+              🗑️ Trash Transit
+                </Text>
+            </SafeAreaView>
+            )
+          }
+          // headerShown: false,
+      })}
+  >
+      <Tab.Screen 
+          name="index" 
+          children={(props) => 
+              <Index 
+              listOfCities={listOfCities}
+              />
+          }
+      />
+      <Tab.Screen 
+          name="comments" 
+          children={(props) => 
+            <Comments 
+            listOfCities={listOfCities}
+            />
+        }
+      />
+
+  </Tab.Navigator></ErrorProvider>
   );
 }
+
+const styles = StyleSheet.create({
+    headerContainerStyle: {
+      backgroundColor: "white",
+      paddingVertical: 15,
+      paddingBottom:20,
+      textAlign: "center",
+      borderBottomColor: "#e6e6e6",
+      borderBottomWidth: 1
+    },
+    headerText: {
+      textAlign: "center",
+      fontWeight: "bold",
+      fontSize:25
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+  },
+});
