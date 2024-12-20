@@ -1,19 +1,21 @@
 import React, { useEffect, useState } from 'react';
 
-import { Stack } from "expo-router";
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text, View, Button, FlatList, ActivityIndicator, StyleSheet, Alert, TouchableOpacity, Linking } from 'react-native';
 import {SafeAreaView} from "react-native-safe-area-context"
 import { Ionicons } from '@expo/vector-icons';
 import Index from './index';
 import Comments from "./comments";
+import PrivacyAndTermsSpeedbump from './components/PrivacyAndTermsSpeedbump';
 import { ErrorProvider } from './components/ErrorContext';
 import {backend_host} from "../project-variables.json"
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const Tab = createBottomTabNavigator();
 
 export default function RootLayout() {
   const [loading, setLoading] = useState<boolean>(true);
+  const [isAwaitingPrivacyAndTermsAccept, setIsAwaitingPrivacyAndTermsAccept] = useState<boolean>(false);
   const [listOfCities, setListOfCities] = useState<string[]>([])
 
   const launchErrorAlert = (errorMsg: string) => {
@@ -47,8 +49,27 @@ export default function RootLayout() {
     setLoading(false)
   } 
 
+  const determineIfTermsAndPrivacyPreviouslyAccepted = async () => {
+    // await AsyncStorage.removeItem("privacyAndTermsAccepted")
+    return await AsyncStorage.getItem('privacyAndTermsAccepted')
+  }
+
+  const AppStartupActions = async() => {
+    if (await determineIfTermsAndPrivacyPreviouslyAccepted() === "true") {
+      fetchData()
+    } else {
+      setIsAwaitingPrivacyAndTermsAccept(true)
+      setLoading(false)
+    }
+  }
+
+  const onConfirmPassSpeedbump = () => {
+    setIsAwaitingPrivacyAndTermsAccept(false)
+    setLoading(false)
+  }
+
   useEffect(() => {
-    fetchData()
+    AppStartupActions()
   }, [])
 
   if (loading) {
@@ -57,6 +78,12 @@ export default function RootLayout() {
           <ActivityIndicator size="large" color="#007bff" />
         </SafeAreaView>
       );
+    }
+  
+    if (isAwaitingPrivacyAndTermsAccept) {
+      return (
+        <PrivacyAndTermsSpeedbump onPassSpeedbump={onConfirmPassSpeedbump} />
+      )
     }
 
   return (

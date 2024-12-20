@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useError } from './components/ErrorContext';
 import CommentModal from './components/CommentModal';
 import CommentCityFilterModal from './components/CommentCityFilterModal';
+import ReportCommentModal from './components/ReportCommentModal';
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import moment from 'moment';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -40,6 +41,8 @@ export default function Comments({ listOfCities }: Props) {
     const opacity = useRef(new Animated.Value(0)).current;
     const flatListRef = useRef<FlatList<any>>(null);
     const [hasReachedEnd, setHasReachedEnd] = useState(false)
+    const [commentToReport, setCommentToReport] = useState<Comment | null>(null)
+    const [showReportModal, setShowReportModal] = useState(false)
 
     const upvoteTextSize = 20
 
@@ -100,7 +103,6 @@ export default function Comments({ listOfCities }: Props) {
       
           // Retrieve liked list from AsyncStorage
           const likedList = await getLikedListFromAsyncStorage();
-
           let dataToDisplay;
 
           if (pageNum !== 1) {
@@ -110,12 +112,24 @@ export default function Comments({ listOfCities }: Props) {
             // Use data.results for the first page
             dataToDisplay = data.results;
           }
-          
+
           if (likedList && likedList.length > 0) {
             dataToDisplay = dataToDisplay.map((item: Comment) => {
               // If item.id is in likedList, add a "liked" key with value true
               if (likedList.includes(item.id)) {
                 return { ...item, liked: true };
+              }
+              return item;
+            });
+          }
+
+          const reportedList = await getReportedListFromAsyncStorage();
+
+          if (reportedList && reportedList.length > 0) {
+            dataToDisplay = dataToDisplay.map((item: Comment) => {
+              // If item.id is in likedList, add a "liked" key with value true
+              if (reportedList.includes(item.id)) {
+                return { ...item, reported: true };
               }
               return item;
             });
@@ -183,11 +197,24 @@ export default function Comments({ listOfCities }: Props) {
           return null;
         }
       } catch (error) {
-        console.error('Failed to retrieve list:', error);
         return null;
       }
     };
     
+    const getReportedListFromAsyncStorage = async (): Promise<number[] | null> => {
+      try {
+        const savedList = await AsyncStorage.getItem('reportedList');
+        if (savedList !== null) {
+          // Parse the JSON string back into an array
+          const list: number[] = JSON.parse(savedList);
+          return list;
+        } else {
+          return null;
+        }
+      } catch (error) {
+        return null;
+      }
+    };
 
     const refreshFromServer = async () => {
       setRefreshing(true)
@@ -205,33 +232,49 @@ export default function Comments({ listOfCities }: Props) {
       setFilterType(optionText)
     }
 
-    const submitWaitMinutes = async (city: string, comment: string) => {
+    const submitComment = async (city: string, comment: string) => {
       setLoading(true)
-      fetch(`${backend_host}/api/submit-comment/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          city: city,
-          comment: comment,
-        }),
-      })
-      .then((response) => {
+
+      try {
+        // Fetch data from the backend
+        const response = await fetch(`${backend_host}/api/submit-comment/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            city: city,
+            comment: comment,
+          }),
+        })
+    
         // Check if the response status code is OK (200-299)
         if (!response.ok) {
-          setError("Oops! There was a problem on our end while submitting. Please try again.")
-          throw new Error(`Error: ${response.status} - ${response.statusText}`);
+          if (response.status !== 404) {
+            setError("Oops! There was a problem on our end while submitting comment. Please try again.");
+            throw new Error(`Error: ${response.status} - ${response.statusText}`);
+          } else {
+            setHasReachedEnd(true)
+          }
+        } else {
+          const data = await response.json();
+          Alert.alert("💯 Success", "Nice! Your comment was submitted. Thanks for making trash transit a more interesting place.")
+          const likedList = await getLikedListFromAsyncStorage();
+          if (likedList) {
+            if (!likedList.includes(data.comment_id)) {
+              likedList.push(data.comment_id);
+              await AsyncStorage.setItem('likedList', JSON.stringify(likedList));
+              // await setLikedListToAsyncStorage(likedList); // Save updated likedList back to AsyncStorage
+            }
+          } else {
+            await AsyncStorage.setItem("likedList", JSON.stringify([data.comment_id]))
+          }
+          fetchData()
         }
-        return response.json(); // Parse the response as JSON
-      })
-      .then((data) => {
-        Alert.alert("💯 Success", "Nice! Your comment was submitted. Thanks for making trash transit a more interesting place.")
-        fetchData()
-      })
-      .catch((error) => {
-        setError("Oops! There was a problem connecting to the server.")
-      });
+      } catch (error) {
+        setError("Oops! There was a problem connecting to the server.");
+      }
+
       setLoading(false)
     }
 
@@ -352,6 +395,58 @@ export default function Comments({ listOfCities }: Props) {
       flatListRef.current?.scrollToOffset({ animated: true, offset: 0 });
     };
 
+    // useEffect(() => {
+    //   if (commentToReport) {
+    //     setShowReportModal(true)
+    //   }
+    // }, [commentToReport])
+
+    const submitCommentReport = (commentID: number, reportReason: string) => {
+      fetch(`${backend_host}/api/report-comment/${commentID}/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          report_reason: reportReason,
+        }),
+      })
+      .then((response) => {
+        // Check if the response status code is OK (200-299)
+        if (!response.ok) {
+          setError("Oops! There was a problem on our end while reporting. Please try again.")
+          throw new Error(`Error: ${response.status} - ${response.statusText}`);
+        }
+        return response.json(); // Parse the response as JSON
+      })
+      .then(async (data) => {
+        setCommentsData((prevCommentsData) => {
+          // Find the comment by commentID and update its "upvotes" value
+          return prevCommentsData.map((comment) => {
+            if (comment.id === commentID) {
+              return { ...comment, reported: true }; // Update the upvotes field
+            }
+            return comment;
+          });
+        });
+        // Step 2: Get the likedList from AsyncStorage
+        const reportList = await getReportedListFromAsyncStorage();
+        if (reportList) {
+          if (!reportList.includes(commentID)) {
+            reportList.push(commentID);
+            await AsyncStorage.setItem('reportedList', JSON.stringify(reportList));
+            // await setLikedListToAsyncStorage(likedList); // Save updated likedList back to AsyncStorage
+          }
+        } else {
+          await AsyncStorage.setItem("reportedList", JSON.stringify([commentID]))
+        }
+        Alert.alert("Comment successfully reported.", "Thanks for submitting a report. The moderators have been notified.")
+      })
+      .catch((error) => {
+        setError("Oops! There was a problem connecting to the server.")
+      });
+    }
+
   if (loading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
@@ -361,8 +456,9 @@ export default function Comments({ listOfCities }: Props) {
   }
   return (
     <View style={{flex:1, backgroundColor:"white"}}>
+      <ReportCommentModal modalVisible={showReportModal} setModalVisible={setShowReportModal} comment={commentToReport} onFinalSubmit={submitCommentReport}/>
       <CommentCityFilterModal modalVisible={showCityFilterModal} setModalVisible={setShowCityFilterModal} citiesData={listOfCities} onFinalSubmit={submitCityFilter} />
-      <CommentModal modalVisible={showCommentModal} setModalVisible={setShowCommentModal} citiesData={listOfCities} onFinalSubmit={submitWaitMinutes}/>
+      <CommentModal modalVisible={showCommentModal} setModalVisible={setShowCommentModal} citiesData={listOfCities} onFinalSubmit={submitComment}/>
       <TouchableOpacity style={styles.fixedButton} onPress={() => setShowCommentModal(true)}>
         <Ionicons name="add-circle" size={24} color="white" />
         {/* <Text style={{color:"white", marginLeft:5, fontWeight:"bold", fontSize:16}}></Text> */}
@@ -527,7 +623,19 @@ export default function Comments({ listOfCities }: Props) {
                   <Text style={styles.reportText}>"{item.report_text}"</Text>
     
                   {/* Sent At */}
-                  <Text style={styles.sentAt}>{timeAgo}</Text>
+                  <View style={{flexDirection:"row", alignItems:"center", justifyContent:"space-between", width:"100%"}}>
+                    {!item.reported ? (<TouchableOpacity onPress={() => {
+                      setCommentToReport(item)
+                      setShowReportModal(true)
+                    }
+                    }>
+                      <Text style={styles.sentAt}>Report</Text>
+                    </TouchableOpacity>) :(
+                      <Text style={[styles.sentAt, {fontStyle:"italic"}]}>Reported</Text>
+                    )}
+                    <Text style={styles.sentAt}>{timeAgo}</Text>
+                  </View>
+                  
                 </View>
               </View>
             </View>
@@ -597,7 +705,7 @@ const styles = StyleSheet.create({
   sentAt: {
     fontSize: 12,
     color: '#666',
-    textAlign: 'right',
+    // textAlign: 'right',
   },
   scrollUpButtonContainer: {
     position: "absolute",
