@@ -2,11 +2,13 @@ import React, { useEffect, useState, useRef  } from 'react';
 
 import { Text, View, ActivityIndicator, StyleSheet, FlatList, TouchableNativeFeedback, ImageBackground, TouchableOpacity, ScrollView, Alert } from "react-native";
 import {SafeAreaView} from "react-native-safe-area-context"
-import {backend_host} from "../project-variables.json"
+import projectVariables from "../project-variables.json"
 import { Ionicons } from '@expo/vector-icons';
 import { useError } from './components/ErrorContext';
 import ReportWaitModal from './components/ReportWaitModal';
 import CityModal from './components/CityModal';
+
+const backend_host = projectVariables.backend_host;
 
 interface Props {
   listOfCities: string[];

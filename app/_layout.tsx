@@ -8,8 +8,10 @@ import Index from './index';
 import Comments from "./comments";
 import PrivacyAndTermsSpeedbump from './components/PrivacyAndTermsSpeedbump';
 import { ErrorProvider } from './components/ErrorContext';
-import {backend_host} from "../project-variables.json"
+import projectVariables from "../project-variables.json"
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const backend_host = projectVariables.backend_host;
 
 const Tab = createBottomTabNavigator();
 

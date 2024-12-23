@@ -3,11 +3,11 @@ import { Text, View, ActivityIndicator, StyleSheet, FlatList, TouchableNativeFee
 import CustomSafeAreaView from './CustomSafeAreaView';
 import {SafeAreaView} from "react-native-safe-area-context"
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import {Picker} from '@react-native-picker/picker';
 import { useError } from '../components/ErrorContext';
-import {backend_host} from "../../project-variables.json"
+import projectVariables from "../../project-variables.json"
 import moment from 'moment';
+
+const backend_host = projectVariables.backend_host;
 
 interface City {
   id: number;
