@@ -4,10 +4,9 @@ import CustomSafeAreaView from './CustomSafeAreaView';
 import {SafeAreaView} from "react-native-safe-area-context"
 import { Ionicons } from '@expo/vector-icons';
 import { useError } from '../components/ErrorContext';
-import projectVariables from "../../project-variables.json"
 import moment from 'moment';
 
-const backend_host = projectVariables.backend_host;
+const backend_host = process.env.EXPO_PUBLIC_BACKEND_HOST
 
 interface City {
   id: number;
