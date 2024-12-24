@@ -44,14 +44,13 @@ export default function RootLayout() {
       setListOfCities(data)
     })
     .catch((error) => {
-
       launchErrorAlert("Oops! There was a problem connecting to the server. Please open the app and try again.")
     });
     setLoading(false)
   } 
 
   const determineIfTermsAndPrivacyPreviouslyAccepted = async () => {
-    // await AsyncStorage.removeItem("privacyAndTermsAccepted")
+    //await AsyncStorage.removeItem("privacyAndTermsAccepted")
     return await AsyncStorage.getItem('privacyAndTermsAccepted')
   }
 
@@ -66,7 +65,8 @@ export default function RootLayout() {
 
   const onConfirmPassSpeedbump = () => {
     setIsAwaitingPrivacyAndTermsAccept(false)
-    setLoading(false)
+    fetchData()
+    //setLoading(false)
   }
 
   useEffect(() => {
